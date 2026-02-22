@@ -1,109 +1,71 @@
 import streamlit as st
-import json
 import os
-from core.gemini_client import start_blog_session
+from dotenv import load_dotenv
+# Ensure your gemini_client.py is inside a folder named 'core'
+from core.gemini_client import get_gemini_client, start_chat_session
 
-# 1. Database Logic: Local JSON Storage
-USER_DB = "users.json"
+# 1. Page Configuration
+st.set_page_config(
+    page_title="AI Career Architect",
+    page_icon="🚀",
+    layout="centered"
+)
 
-def load_users():
-    if os.path.exists(USER_DB):
-        with open(USER_DB, "r") as f:
-            return json.load(f)
-    return {}
+# 2. Header Section
+st.title("🚀 AI Career Architect")
+st.markdown("""
+Welcome to your 2026 Career Strategy Suite. 
+I specialize in **Cloud Computing, AI, and Machine Learning** pathfinding.
+""")
+st.divider()
 
-def save_user(username, password):
-    users = load_users()
-    if username in users:
-        return False
-    users[username] = password
-    with open(USER_DB, "w") as f:
-        json.dump(users, f)
-    return True
+# 3. Initialize the AI Engine & Session State
+# This ensures we don't restart the AI model every time the user types a message
+if "model" not in st.session_state:
+    with st.spinner("Initializing Architect Brain..."):
+        st.session_state.model = get_gemini_client()
 
-# 2. Page Configuration
-st.set_page_config(page_title="CareerArchitect Pro", page_icon="💼", layout="wide")
-
-# 3. Session State
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 if "chat_session" not in st.session_state:
-    st.session_state.chat_session = None
+    # This starts the native Gemini multi-turn memory
+    st.session_state.chat_session = start_chat_session(st.session_state.model)
 
-# --- AUTHENTICATION INTERFACE ---
-def auth_page():
-    st.container()
-    _, mid, _ = st.columns([1, 2, 1])
-    with mid:
-        st.title("👨‍💼 CareerArchitect Pro")
-        tab1, tab2 = st.tabs(["Login", "Sign Up"])
+if "messages" not in st.session_state:
+    # This stores the chat history to display in the UI
+    st.session_state.messages = []
 
-        with tab1:
-            st.subheader("Login")
-            u_login = st.text_input("Username", key="l_user")
-            p_login = st.text_input("Password", type="password", key="l_pass")
-            if st.button("Login", use_container_width=True):
-                users = load_users()
-                if u_login in users and users[u_login] == p_login:
-                    st.session_state.authenticated = True
-                    st.session_state.chat_session = start_blog_session()
-                    st.rerun()
-                else:
-                    st.error("Invalid username or password")
+# 4. Display Chat History
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-        with tab2:
-            st.subheader("Create Account")
-            u_signup = st.text_input("New Username", key="s_user")
-            p_signup = st.text_input("New Password", type="password", key="s_pass")
-            if st.button("Register", use_container_width=True):
-                if u_signup and p_signup:
-                    if save_user(u_signup, p_signup):
-                        st.success("Account created! Please switch to Login tab.")
-                    else:
-                        st.error("Username already exists.")
-                else:
-                    st.warning("Please fill in both fields.")
-
-# --- MAIN APP LOGIC ---
-if not st.session_state.authenticated:
-    auth_page()
-else:
-    # --- Sidebar: Profile & Logout ---
-    with st.sidebar:
-        st.title("👤 Dashboard")
-        st.write("Career Mode: **Active**")
-        st.divider()
-        exp_level = st.select_slider("Experience", ["Student", "Junior", "Mid", "Senior"])
-        target_role = st.text_input("Target Role", value="AI Engineer")
-        
-        if st.button("🚪 Logout", use_container_width=True):
-            st.session_state.authenticated = False
-            st.rerun()
-
-    # --- Chat Interface ---
-    st.title("🚀 Career Strategy Workspace")
+# 5. User Input and Response Logic
+if prompt := st.chat_input("Ask about your AI career path (e.g., 'How do I learn MLOps?')"):
     
-    # Display Chat
-    chat_box = st.container(height=450)
-    with chat_box:
-        for m in st.session_state.messages:
-            with st.chat_message(m["role"]):
-                st.markdown(m["content"])
+    # Display user message
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-    # Input Logic
-    if prompt := st.chat_input("Ask your advisor..."):
-        with chat_box:
-            st.chat_message("user").markdown(prompt)
-        st.session_state.messages.append({"role": "user", "content": prompt})
+    # Generate and display Assistant response
+    with st.chat_message("assistant"):
+        try:
+            # We send the message to the session so the bot remembers context
+            response = st.session_state.chat_session.send_message(prompt)
+            full_response = response.text
+            st.markdown(full_response)
+            
+            # Save to history
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
+            
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
+            st.info("Tip: Check your Streamlit Secrets and API quota.")
 
-        # Injecting Context
-        full_prompt = f"CONTEXT: [Level: {exp_level}, Role: {target_role}] REQUEST: {prompt}"
-
-        with chat_box:
-            with st.chat_message("assistant"):
-                with st.status("Analyzing...", expanded=False):
-                    response = st.session_state.chat_session.send_message(full_prompt)
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
+# 6. Sidebar for Project Info
+with st.sidebar:
+    st.header("Project Info")
+    st.info("Built with Gemini 1.5 Flash & Streamlit")
+    if st.button("Clear Conversation"):
+        st.session_state.messages = []
+        st.session_state.chat_session = start_chat_session(st.session_state.model)
+        st.rerun()
