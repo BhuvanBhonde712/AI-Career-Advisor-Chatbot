@@ -1,29 +1,35 @@
-import os
+import streamlit as st
 import google.generativeai as genai
+import os
 from dotenv import load_dotenv
-from core.prompts import CAREER_ADVISOR_SYSTEM_INSTRUCTION
 
-# Load environment variables
+# Load local .env if it exists (for local testing)
 load_dotenv()
 
-# Configure the API Key
-api_key = os.getenv("GOOGLE_API_KEY")
-genai.configure(api_key=api_key)
-
-def get_gemini_model():
+def get_gemini_client():
+    # Priority 1: Streamlit Cloud Secrets | Priority 2: Local .env
+    api_key = st.secrets.get("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    
+    if not api_key:
+        st.error("🚨 API Key Missing: Please add 'GOOGLE_API_KEY' to your Streamlit Secrets.")
+        st.stop()
+        
+    genai.configure(api_key=api_key)
+    
+    # Define the strict Persona
+    system_instruction = """
+    You are a Lead AI Career Architect. Your goal is to guide users in 2026 
+    through Cloud Computing, AI, and Machine Learning career paths. 
+    Be professional, technical, and encouraging. 
+    Always suggest specific tools like AWS, Kubernetes, or Gemini API.
     """
-    Initializes the Gemini model with the Career Advisor persona.
-    """
+    
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash", # or "gemini-2.5-flash" based on your local availability
-        system_instruction=CAREER_ADVISOR_SYSTEM_INSTRUCTION
+        model_name="gemini-1.5-flash",
+        system_instruction=system_instruction
     )
     return model
 
-def start_blog_session():
-    """
-    Starts the multi-turn chat session. 
-    (We keep the name 'start_blog_session' so app.py can find it)
-    """
-    model = get_gemini_model()
+def start_chat_session(model):
+    # Initialize native Gemini chat with memory
     return model.start_chat(history=[])
