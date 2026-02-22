@@ -25,7 +25,7 @@ def get_gemini_client():
     """
     
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
+        model_name="gemini-2.5-flash",
         system_instruction=system_instruction
     )
     return model
@@ -33,3 +33,4 @@ def get_gemini_client():
 def start_chat_session(model):
     # Initialize native Gemini chat with memory
     return model.start_chat(history=[])
+
